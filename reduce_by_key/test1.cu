@@ -26,6 +26,12 @@ __global__ void reduce_by_key_kernel_v1 (int* g_keys,
 
 int main(void)
 {
+	cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+	printf("Device name: %s\n", prop.name);
+	cudaSetDevice(0);
+
+
 	int major = THRUST_MAJOR_VERSION;
 	int minor = THRUST_MINOR_VERSION;
 	std::cout << "Thrust v" << major << "." << minor << std::endl;
@@ -91,8 +97,8 @@ int main(void)
 	thrust::device_vector<float>   d_array=h_array;
 
 	//-----------------------------------------------------------------------//
-	// std::cout << "\ntesting thrust::reduce_by_key\n";
-	// thrust_reduce_by_key(d_keys, d_array, Ksize, Len);
+	std::cout << "\ntesting thrust::reduce_by_key\n";
+	thrust_reduce_by_key(d_keys, d_array, Ksize, Len);
 
 
 	//-----------------------------------------------------------------------//
@@ -270,4 +276,7 @@ void reduce_by_key_v1(thrust::device_vector<int> &d_keys,
 		std::cout << h_out_vals[i] << " ";
 	}
 	std::cout << std::endl;
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 }
