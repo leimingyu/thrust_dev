@@ -6,5 +6,5 @@ input size 896,   key size 124
 
 | GPU      | Thrust Runtime (ms) | Customized Version Runtime (ms) | Seedup |
 |----------|---------------------|---------------------------------|--------|
-| GTX 950  | 0.33                | 0.18                            | 1.83X  |
-| RTX 2070 |                     |                                 |        |
+| GTX 950  | 0.033                | 0.018                            | 1.83x  |
+| RTX 2070 | 0.037                | 0.014                            | 2.64x |
