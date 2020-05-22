@@ -4,6 +4,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/reduce.h>
+#include <thrust/fill.h>
 
 // examples
 // [1] https://github.com/thrust/thrust/wiki/Quick-Start-Guide
@@ -24,6 +25,13 @@ __global__ void reduce_by_key_kernel_v1 (int* g_keys,
 		const int Len,
 		float* g_output);
 
+__global__ void reduce_by_key_kernel_more (int* g_keys,
+		int* g_norep_keys,
+		float* g_input,
+		const int Ksize,
+		const int Len,
+		float* g_output);
+
 int main(void)
 {
 	cudaDeviceProp prop;
@@ -38,15 +46,18 @@ int main(void)
 
 	//-----------------------------------------------------------------------//
 	std::cout << "initialize keys on the host\n";
-	const int Len = 896;
+	const int Len = 2047;
 	const int Ksize = 124;
+
+	int REAP = Len / Ksize;
 
 	thrust::host_vector<int>   h_keys(Len);
 	thrust::host_vector<float> h_array(Len);
 
 	for(int i=0; i<Len; i++) { 
-		int ii = i / 7;
-		int k = Ksize - (ii + 1); // repeat the value 7 times 
+		//int ii = i / 7;
+		int ii = i / REAP;
+		int k = Ksize - (ii + 1); // repeat the value
 		if(k <0) k =0;
 
 		h_keys[i] = k;
@@ -211,6 +222,47 @@ __global__ void reduce_by_key_kernel_v1 (int* g_keys,
 
 }
 
+__global__ void reduce_by_key_kernel_more (int* g_keys,
+		int* g_norep_keys,
+		float* g_input,
+		const int Ksize,
+		const int Len,
+		float* g_output)
+{
+	__shared__ int   sm_keys[1024];
+	__shared__ float sm_vals[1024];
+
+	int lid = threadIdx.x;
+	int gid = threadIdx.x + blockIdx.x * blockDim.x;
+
+	// norep_keys should be smaller than 1024, and the size of shared memory
+	if(lid < Ksize) {
+		sm_keys[lid] = g_norep_keys[lid];	
+		sm_vals[lid] = 0.f;
+	}
+
+	__syncthreads();
+
+	if(gid < Len) {
+		int   my_key = g_keys[gid];
+		float my_val = g_input[gid];
+
+		for(int i=0; i<Ksize; i++) {
+			if(my_key == sm_keys[i]) {
+				atomicAdd(&sm_vals[i], my_val);
+				break;
+			}
+		}
+	}
+
+	__syncthreads();
+
+	if(lid < Ksize) {
+		atomicAdd(&g_output[lid], sm_vals[lid]);
+	}
+
+}
+
 void reduce_by_key_v1(thrust::device_vector<int> &d_keys,
 		              thrust::device_vector<int> &d_norep_keys,
 		              thrust::device_vector<float> &d_array,
@@ -234,12 +286,38 @@ void reduce_by_key_v1(thrust::device_vector<int> &d_keys,
 	float *g_output      = thrust::raw_pointer_cast(d_out_vals.data());
 
 	if(Len > 1024) {
-		printf("(Bummer) => I need to work on this configuration\n");
-		exit(1);
+
+		dim3 Grds(1,1,1);
+		dim3 Blks(1024,1,1);
+		Grds.x = (int) (Len + 1023) / 1024;
+
+		// Measure the runtime
+		for(int reps=0; reps<100; reps++)
+		{
+			thrust::fill(d_out_vals.begin(), d_out_vals.end(), 0.f);
+
+			local_ms = 0.f;
+			cudaEventRecord(start, 0);
+
+			reduce_by_key_kernel_more <<< Grds, Blks >>> (g_keys,
+					g_norep_keys,
+					g_input,
+					Ksize,
+					Len,
+					g_output   // this needs to be initialize to zeros
+					); 
+
+			cudaEventRecord(stop, 0);
+			cudaEventSynchronize(stop);
+			cudaEventElapsedTime(&local_ms, start, stop);
+			gputime_ms += local_ms;
+		}
+
+		printf("(reduce_by_key_more) runtime = %lf (ms)\n", gputime_ms * 0.01);
+
 	}else{
 		dim3 Grds(1,1,1);
 		dim3 Blks(Len,1,1);
-
 
 		// Measure the runtime
 		for(int reps=0; reps<100; reps++)
