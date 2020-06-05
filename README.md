@@ -13,3 +13,13 @@ input size 2047,   key size 124
 | GPU      | Thrust Runtime (ms) | Customized Version Runtime (ms) | Seedup |
 |----------|---------------------|---------------------------------|--------|
 | GTX 950  | 0.033                | 0.022                            | 1.83x  |
+
+
+### transform_reduce 
+input size 12 
+
+| GPU      | Thrust Runtime (ms) | Customized Version Runtime (ms) | Seedup |
+|----------|---------------------|---------------------------------|--------|
+| GTX 950  | 0.051               | 0.007                            | 7x  |
+
+
